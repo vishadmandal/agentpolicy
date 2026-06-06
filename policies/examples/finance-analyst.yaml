@@ -1,0 +1,47 @@
+# Finance Analyst Agent Policy
+# Use case: Agent reads transaction data and generates financial summaries.
+# It must never write, delete, or access other departments' data.
+
+agent: "agent:finance-analyst"
+version: "1.0.0"
+
+tools:
+  allow:
+    - "db:read:transactions"
+    - "db:read:reports"
+    - "db:read:exchange-rates"
+    - "storage:write:output-bucket"
+    - "api:call:internal-summary-service"
+  deny:
+    - "db:write:*"
+    - "db:delete:*"
+    - "api:call:external:*"
+    - "storage:delete:*"
+    - "email:send:external"
+
+delegation:
+  can_delegate_to:
+    - "agent:summarizer"
+    - "agent:chart-generator"
+  cannot_delegate_to:
+    - "agent:admin"
+    - "agent:db-migration"
+    - "agent:payment-processor"
+  max_delegation_depth: 2
+
+data_access:
+  allowed_scopes:
+    - "tenant:acme"
+    - "dept:finance"
+  denied_scopes:
+    - "dept:hr"
+    - "dept:legal"
+    - "dept:executive"
+    - "pii:ssn"
+    - "pii:health"
+    - "pii:salary"
+
+context:
+  max_execution_time_seconds: 180
+  max_tool_calls_per_run: 100
+  allow_external_network: false

@@ -1,0 +1,74 @@
+# Customer Support Agent Policy
+# Use case: Agent handles customer queries, can read orders and user info,
+# can issue refunds up to a threshold, cannot access payment instruments directly.
+
+agent: "agent:customer-support"
+version: "1.0.0"
+
+tools:
+  allow:
+    - "db:read:orders"
+    - "db:read:users:profile"
+    - "db:read:products"
+    - "db:write:support-tickets"
+    - "db:write:refunds:partial"    # partial refunds only — full refunds require human
+    - "email:send:internal"
+    - "api:call:internal-knowledge-base"
+  deny:
+    - "db:read:users:payment-methods"
+    - "db:read:users:full-address"
+    - "db:delete:*"
+    - "db:write:orders"             # cannot modify orders directly
+    - "api:call:payments:charge"
+    - "api:call:payments:refund:full"
+    - "email:send:external"
+
+  # Argument-level constraints (APS v0.2+)
+  arg_constraints:
+    - tool: "db:write:refunds:partial"
+      constraints:
+        amount_usd:
+          max: 50.00    # agent cannot issue refunds over $50 without escalation
+
+    - tool: "email:send:internal"
+      constraints:
+        to_domain:
+          allowlist: ["acme.com"]
+
+delegation:
+  can_delegate_to:
+    - "agent:order-lookup"
+    - "agent:knowledge-base-search"
+  cannot_delegate_to:
+    - "agent:finance-analyst"
+    - "agent:admin"
+    - "agent:payment-processor"
+  max_delegation_depth: 1    # support agent cannot chain deeply
+
+data_access:
+  allowed_scopes:
+    - "tenant:acme"
+    - "dept:support"
+    - "user:requesting-user-only"   # can only see data for the user in the current ticket
+  denied_scopes:
+    - "pii:ssn"
+    - "pii:health"
+    - "pii:payment-full"
+    - "dept:hr"
+    - "dept:finance"
+
+context:
+  max_execution_time_seconds: 60
+  max_tool_calls_per_run: 30
+  allow_external_network: false
+
+# Input guards — flag potential social engineering attempts
+input_guards:
+  - pattern: "give me a full refund"
+    action: "flag"
+  - pattern: "i know your supervisor"
+    action: "flag"
+  - pattern: "override policy"
+    action: "flag"
+  - pattern: "ignore your instructions"
+    action: "block"

@@ -1,0 +1,49 @@
+# Data Pipeline Agent Policy
+# Use case: Agent orchestrates ETL pipelines — reads from source systems,
+# transforms data, writes to data warehouse. Never touches prod application DB.
+
+agent: "agent:data-pipeline"
+version: "1.0.0"
+
+tools:
+  allow:
+    - "db:read:analytics-source"
+    - "db:read:staging"
+    - "db:write:data-warehouse"
+    - "db:write:staging"
+    - "storage:read:raw-data-bucket"
+    - "storage:write:processed-bucket"
+    - "api:call:internal-transform-service"
+    - "queue:publish:pipeline-events"
+  deny:
+    - "db:read:production-app-db"    # strict separation from prod
+    - "db:write:production-app-db"
+    - "db:delete:data-warehouse"     # pipeline never deletes warehouse data
+    - "api:call:external:*"
+    - "email:send:*"                 # pipeline has no business emailing anyone
+
+delegation:
+  can_delegate_to:
+    - "agent:data-transformer"
+    - "agent:data-validator"
+    - "agent:report-generator"
+  cannot_delegate_to:
+    - "agent:admin"
+    - "agent:finance-analyst"
+  max_delegation_depth: 3           # ETL chains can be deeper
+
+data_access:
+  allowed_scopes:
+    - "tenant:acme"
+    - "system:analytics"
+    - "system:warehouse"
+  denied_scopes:
+    - "pii:ssn"
+    - "pii:health"
+    - "pii:payment-full"
+    - "system:production-app"
+
+context:
+  max_execution_time_seconds: 3600   # pipelines can be long-running
+  max_tool_calls_per_run: 1000
+  allow_external_network: false
